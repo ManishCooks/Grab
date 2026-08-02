@@ -3,7 +3,7 @@
 
 #include <bits/stdc++.h>
 #include <sys/mman.h>
-#include <mutex>
+
 using namespace std;
 
 /**
@@ -38,8 +38,6 @@ class grab {
         
         Node* list[32] = {}; //init of the free list
 
-        mutex mtx;
-
     public:
         grab(size_t size) : total_size(size), offset(0) 
         { 
@@ -64,8 +62,6 @@ class grab {
             since every payload is attached with a header of of size "sizeof(size_t)" (8 bytes).
             */
             
-            lock_guard<mutex> lock(mtx);
-
             size = std::max((size_t)8, size); // Clamp to 8 minimum
 
             unsigned idx = (size-1)/8;
@@ -92,8 +88,6 @@ class grab {
         }
 
         void deallocate(void* ptr){
-
-            lock_guard<mutex> lock(mtx);
 
             size_t* size_start = (size_t*)ptr - 1;
             Node* temp = (Node*)ptr;
