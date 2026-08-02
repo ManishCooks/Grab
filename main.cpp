@@ -6,7 +6,7 @@ using namespace std;
 
 #define GB (1024ULL*1024*1024)
 
-grab g(GB);
+thread_local grab g(GB);
 
 void work(){
     for(int i=0;i<100000;i++){
