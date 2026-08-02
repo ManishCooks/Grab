@@ -1,4 +1,4 @@
-# Grab Allocator Experiments
+# Grab 
 
 This repository contains a high-performance grab (custom memory allocator) and benchmark experiments to measure and resolve multi-threaded lock contention.
 

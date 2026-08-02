@@ -6,26 +6,28 @@
 
 using namespace std;
 
-/**
-     * @class GrabAllocator
-     * @brief A high-performance, custom memory allocator using Segregated Free Lists.
-     *
-     * DESIGN TRADE-OFFS:
-     * This allocator utilizes an array of segregated free lists (size classes) rather 
-     * than a single contiguous free list with block headers. 
-     * 
-     * 1. Time Complexity (The O(1) Advantage): In a single-list design, allocation 
-     *    requires O(N) traversal to find a block of suitable size (First-Fit/Best-Fit). 
-     *    By segregating blocks into power-of-2 buckets, allocation and deallocation 
-     *    become strictly O(1) operations.
-     * 
-     * 2. Space Trade-off (Internal vs External Fragmentation): 
-     *    - Single List: Suffers from external fragmentation as free blocks scatter.
-     *    - Segregated Lists: Trades external fragmentation for minor "internal" 
-     *      fragmentation (e.g., allocating 12 bytes returns a 16-byte block, wasting 
-     *      4 bytes), but guarantees predictable, ultra-low latency.    
-     */
+/*
+@class grab
+    DESIGN TRADE-OFFS:
+    This allocator utilizes an array of segregated free lists (size classes) rather 
+    than a single contiguous free list with block headers. 
+    
+    1. Time Complexity (The O(1) Advantage): In a single-list design, allocation 
+        requires O(N) traversal to find a block of suitable size (First-Fit/Best-Fit). 
+        By segregating blocks into power-of-2 buckets, allocation and deallocation 
+        become strictly O(1) operations.
+    
+    2. Space Trade-off (Internal vs External Fragmentation): 
+        - Single List: Suffers from external fragmentation as free blocks scatter.
+        - Segregated Lists: Trades external fragmentation for minor "internal" 
+        fragmentation (e.g., allocating 12 bytes returns a 16-byte block, wasting 
+        4 bytes), but guarantees predictable, ultra-low latency.    
+     
+*/
 
+const size_t MAX_SMALL_ALLOC = 1024;
+
+const size_t NUM_CLASSES = MAX_SMALL_ALLOC / 8;
 
 class grab {
     private:
@@ -36,7 +38,7 @@ class grab {
             Node* next;
         };
         
-        Node* list[32] = {}; //init of the free list
+        Node* list[NUM_CLASSES] = {}; //init of the free list
 
     public:
         grab(size_t size) : total_size(size), offset(0) 
@@ -50,6 +52,11 @@ class grab {
                 -1,                         
                 0                          
             );
+            
+            if(raw_mem == MAP_FAILED){
+                throw bad_alloc();
+            }
+
             mem_pool = (char*) raw_mem;
         }
         
@@ -62,7 +69,11 @@ class grab {
             since every payload is attached with a header of of size "sizeof(size_t)" (8 bytes).
             */
             
-            size = std::max((size_t)8, size); // Clamp to 8 minimum
+            if (size > MAX_SMALL_ALLOC) {
+                return nullptr; 
+            }
+
+            size = std::max((size_t)8, size); // Cap to 8 minimum
 
             unsigned idx = (size-1)/8;
             //calculate payload
@@ -70,7 +81,7 @@ class grab {
 
             size_t total_chunk = payload+sizeof(size_t);
 
-            if(offset+size>total_size){
+            if(offset+total_chunk>total_size){
                 return nullptr;
             }
             
@@ -88,6 +99,10 @@ class grab {
         }
 
         void deallocate(void* ptr){
+
+            if (size > MAX_SMALL_ALLOC) {
+                return nullptr; 
+            }
 
             size_t* size_start = (size_t*)ptr - 1;
             Node* temp = (Node*)ptr;
