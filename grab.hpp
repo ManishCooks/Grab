@@ -31,16 +31,18 @@ const size_t NUM_CLASSES = MAX_SMALL_ALLOC / 8;
 
 class grab {
     private:
-        char* mem_pool = nullptr;
-        size_t offset{};
-        size_t total_size{};
+        char* mem_pool = nullptr; // base addrs
+        size_t offset{}; //bump offset
+        size_t total_size{}; // how much is reserved
+        // a free block as Node
         struct Node{
-            Node* next;
+            Node* next; //free list next pointer
         };
         
         Node* list[NUM_CLASSES] = {}; //init of the free list
 
     public:
+        //constructor
         grab(size_t size) : total_size(size), offset(0) 
         { 
             //using mmap to take some chunk of memory 
@@ -75,38 +77,42 @@ class grab {
 
             size = std::max((size_t)8, size); // Cap to 8 minimum
 
-            unsigned idx = (size-1)/8;
+            unsigned idx = (size-1)/8; //ensures 0-based mapping
             //calculate payload
             size_t payload = (idx+1)*8;
 
             size_t total_chunk = payload+sizeof(size_t);
 
+            if(list[idx]){
+                //making it the head and pushing the used node  
+                Node* temp = list[idx];
+                list[idx] = list[idx]->next;
+                return (void*)temp;
+            }
+
             if(offset+total_chunk>total_size){
                 return nullptr;
             }
+        
+            char* bwlock = mem_pool+offset; //pointing to starting address    
+            *(size_t*) block = payload; //writing of payload size
+            void* user_ptr = block+sizeof(size_t); //pointing to starting addrs of free mem
+            offset += total_chunk;  
+            return (void*)user_ptr;
             
-            if(!list[idx]){
-                char* bump = mem_pool+offset; //pointing to starting address    
-                *(size_t*) bump = payload;
-                offset += total_chunk; 
-                bump += sizeof(size_t);
-                return (void*)bump;
-            }
-            
-            Node* temp = list[idx];
-            list[idx] = list[idx]->next;
-            return (void*)temp;
         }
 
         void deallocate(void* ptr){
 
-            if (size > MAX_SMALL_ALLOC) {
-                return nullptr; 
+            if (!ptr) {
+                return; 
             }
-
+            
+            //getting the size of the block from the payload
             size_t* size_start = (size_t*)ptr - 1;
             Node* temp = (Node*)ptr;
             unsigned idx = (*size_start-1)/8;
+            //making it the head and pushing the used node 
             temp->next = list[idx];
             list[idx] = temp; 
         }
